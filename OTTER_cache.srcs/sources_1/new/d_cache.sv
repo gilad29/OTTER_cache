@@ -21,9 +21,12 @@
 
 
 module d_cache(
-    input [127:0] mem_data,
+    input CLK,
+    input [127:0] mem_data, //i_dcache_to_ram.controller(mem_data)
     input [31:0] cpu_req_addr, cpu_req_data,
-    output [31:0] data,
+      //cpu_req_addr = i_mhub_to_dcache.device(waddr)
+      //cpu_req_data = i_mhub_to_dcache.device(din)
+    output [31:0] data, //i_mhub_to_dcache.device(dout)
     output logic hit
     );
 
@@ -43,8 +46,8 @@ module d_cache(
 
     assign hit = tag_match && valid;
 
-    tag_mem TAG (.index(index_req), .tag(tag_current), .valid(valid), .dirty(dirty));
-    cache_data cache_d(.data_in(mem_data), .index(index_req), .block_offset(block_offset_req), .byte_offset(byte_offset_req), .data_out(data_out));
+    tag_mem TAG ( .CLK(CLK), .index(index_req), .tag(tag_current), .valid(valid), .dirty(dirty));
+    cache_data cache_d(.CLK(CLK), .data_in(mem_data), .index(index_req), .block_offset(block_offset_req), .byte_offset(byte_offset_req), .data_out(data_out));
 
     always_comb begin
         if (tag_current == tag_req) begin
@@ -61,6 +64,7 @@ endmodule
 
 
 module tag_mem(
+    input CLK,
     input [7:0] index,
     output logic [19:0] tag,
     output logic valid,
@@ -68,7 +72,7 @@ module tag_mem(
 
     logic [63:0] tag_memory [21:0];
 
-    always_comb
+    always@(posedge CLK)
     begin
       tag = tag_memory[index][19:0];
       dirty = tag_memory[index][20];
@@ -80,6 +84,7 @@ module tag_mem(
 endmodule
 
 module cache_data(
+    input CLK,
     input [127:0] data_in,
     input [7:0] index,
     input [1:0] block_offset, byte_offset,
@@ -88,7 +93,7 @@ module cache_data(
 
   logic [63:0] cache_memory [127:0];
 
-  always_comb
+  always@(posedge CLK)
   begin
       data_out = cache_memory[index];
   end
