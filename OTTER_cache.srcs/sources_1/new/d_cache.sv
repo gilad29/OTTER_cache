@@ -36,16 +36,19 @@ module d_cache(
     wire [7:0] index_req;
     wire [1:0] block_offset_req, byte_offset_req;
     wire [31:0] data_out_32;
-    wire [127:0] data_out;
+    wire [127:0] cache_din, data_out;
 
     // assign tag_req = cpu_req_addr[31:13];
-    assign tag_req = mhub.waddr[31:13]
+    assign tag_req = mhub.waddr[31:13];
     assign index_req = mhub.waddr[12:4];
     assign block_offset_req = mhub.waddr[3:2];
     assign byte_offset_req = mhub.waddr[1:0];
     assign data_out_32 = mhub.dout;
+    assign ram.din = data_out;
+    assign ram.baddr = mhub.waddr;
 
     wire [19:0] tag_current;
+    logic wr_valid, wr_dirty, wr_tag;
     logic valid, dirty;
     logic tag_match;
 
@@ -55,10 +58,19 @@ module d_cache(
     wire ready;
     assign ready = ~ram.hold;
 
-    tag_mem TAG ( .CLK(CLK), .index(index_req), .tag(tag_current), .valid(valid), .dirty(dirty));
+    always_comb begin
+      if (mhub.we)
+        cache_din = {{96{1'b0}},mhub.din};
+      else if (ready)
+        cache_din = ram.dout;
+      else
+        cache_din = 0;
+    end
+
+    tag_mem TAG ( .CLK(CLK), .index(index_req), .tag_in(tag_req), .dirty_in(wr_dirty), .valid_in(wr_valid), .we(wr_tag), .tag_out(tag_current), .valid(valid), .dirty(dirty));
     // cache_data cache_d(.CLK(CLK), .data_in(mem_data), .index(index_req), .block_offset(block_offset_req), .byte_offset(byte_offset_req), .data_out(data_out));
-    cache_data cache_d(.CLK(CLK), .data_in(ram.dout), .we(mhub.we), .from_ram(), .be(mhub.be), .index(index_req), .block_offset(block_offset_req), .byte_offset(byte_offset_req), .data_out(data_out));
-    cache_FSM cache_fsm(.CLK(CLK), .miss(miss), .ready(ready), .dirty(dirty),  );
+    cache_data cache_d(.CLK(CLK), .data_in(cache_din), .we(mhub.we || ready), .from_ram(ready), .be(mhub.be), .index(index_req), .block_offset(block_offset_req), .byte_offset(byte_offset_req), .data_out(data_out));
+    cache_FSM cache_fsm(.CLK(CLK), .miss(miss), .ready(ready), .dirty(dirty), .en(mhub.en), .we(mhub.we), .we_mem(ram.we), .en_mem(ram.en), .wr_dirty(wr_dirty), .valid(wr_valid), .wr_tag(wr_tag), .cpu_hold(mhub.hold) );
 
     always_comb begin
         if (tag_current == tag_req) begin
@@ -77,7 +89,10 @@ endmodule
 module tag_mem(
     input CLK,
     input [7:0] index,
+    input dirty_in,
+    input valid_in,
     input [19:0] tag_in,
+    input we,
     output logic [19:0] tag_out,
     output logic valid,
     output logic dirty);
@@ -86,7 +101,11 @@ module tag_mem(
 
     always@(posedge CLK)
     begin
-
+      if (we == 1) begin
+        tag_memory[index][19:0] = tag_in;
+        tag_memory[index][20] = dirty_in;
+        tag_memory[index][21] = valid_in;
+      end
     end
 
     always_comb begin
@@ -94,8 +113,6 @@ module tag_mem(
       dirty = tag_memory[index][20];
       valid = tag_memory[index][21];
     end
-
-);
 
 endmodule
 

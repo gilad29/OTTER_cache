@@ -2,3 +2,5 @@ OTTER_cache.cache/
 OTTER_cache.hw/
 OTTER_cache.ip_user_files/
 OTTER_cache.sim/
+OTTER_cache.runs/
+vivado_*
