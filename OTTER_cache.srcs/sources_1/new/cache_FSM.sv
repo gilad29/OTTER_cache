@@ -21,8 +21,8 @@
 
 
 module cache_FSM(
-    input CLK, miss, dirty, ready, en, we;
-    output logic we_mem, en_mem, wr_dirty, valid, wr_tag, cpu_hold;
+    input CLK, miss, dirty, ready, en, we,
+    output logic we_mem, en_mem, wr_dirty, valid, wr_tag, cpu_hold
     );
 
     typedef enum logic[1:0] {COMPARE_TAG,WRITEBACK,ALLOCATE} state_type;
@@ -62,11 +62,10 @@ module cache_FSM(
           cpu_hold <= 1;
           en_mem <= 0;
           we_mem <= 1;
-          if (ready) begin
+          if (ready) 
             state <= ALLOCATE;
           else
             state <= WRITEBACK;
-          end
         end
         ALLOCATE: begin
           valid <= 0;
@@ -75,11 +74,10 @@ module cache_FSM(
           cpu_hold <= 1;
           we_mem <= 0;
           en_mem <= 1;
-          if (ready) begin
+          if (ready)
             state <= COMPARE_TAG;
           else
             state <= ALLOCATE;
-          end
         end
       endcase
     end

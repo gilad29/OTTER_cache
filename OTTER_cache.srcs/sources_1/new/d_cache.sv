@@ -36,7 +36,8 @@ module d_cache(
     wire [7:0] index_req;
     wire [1:0] block_offset_req, byte_offset_req;
     wire [31:0] data_out_32;
-    wire [127:0] cache_din, data_out;
+    wire [127:0] data_out;
+    logic [127:0] cache_din;
 
     // assign tag_req = cpu_req_addr[31:13];
     assign tag_req = mhub.waddr[31:13];
@@ -123,7 +124,7 @@ module cache_data(
     input [3:0] be,
     input [7:0] index,
     input [1:0] block_offset, byte_offset,
-    output logic [127:0] data_out,
+    output logic [127:0] data_out
   );
 
   logic [255:0] cache_memory [127:0];

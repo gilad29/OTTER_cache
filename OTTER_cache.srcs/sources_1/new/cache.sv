@@ -23,7 +23,7 @@ typedef struct{
     logic [31:0] data;
     logic rw;
     logic valid;
-	logic byte_enable
+	logic byte_enable;
 }cpu_req_type;
 
 //Cache result (cache controller -> CPU)
