@@ -40,24 +40,26 @@ module d_cache(
     logic [127:0] cache_din;
 
     // assign tag_req = cpu_req_addr[31:13];
-    assign tag_req = mhub.waddr[31:13];
-    assign index_req = mhub.waddr[12:4];
+    assign tag_req = mhub.waddr[31:12];
+    assign index_req = mhub.waddr[11:4];
     assign block_offset_req = mhub.waddr[3:2];
-    assign byte_offset_req = mhub.waddr[1:0];
-    assign data_out_32 = mhub.dout;
+    //assign byte_offset_req = mhub.waddr[1:0];
+    assign mhub.dout = data_out_32;
     assign ram.din = data_out;
-    assign ram.baddr = mhub.waddr;
-
+    assign ram.baddr = mhub.waddr;    
+   
     wire [19:0] tag_current;
-    logic wr_valid, wr_dirty, wr_tag;
+    logic wr_valid, wr_dirty, wr_tag, wr_ram_mhub;
     logic valid, dirty;
     logic tag_match;
 
+    wire hit;
     assign hit = tag_match && valid;
     wire miss;
     assign miss = ~hit;
     wire ready;
     assign ready = ~ram.hold;
+    wire wr_from_ram;
 
     always_comb begin
       if (mhub.we)
@@ -68,10 +70,10 @@ module d_cache(
         cache_din = 0;
     end
 
-    tag_mem TAG ( .CLK(CLK), .index(index_req), .tag_in(tag_req), .dirty_in(wr_dirty), .valid_in(wr_valid), .we(wr_tag), .tag_out(tag_current), .valid(valid), .dirty(dirty));
+    tag_mem_d TAG ( .CLK(CLK), .index(index_req), .tag_in(tag_req), .dirty_in(wr_dirty), .valid_in(wr_valid), .we(wr_tag), .tag_out(tag_current), .valid(valid), .dirty(dirty));
     // cache_data cache_d(.CLK(CLK), .data_in(mem_data), .index(index_req), .block_offset(block_offset_req), .byte_offset(byte_offset_req), .data_out(data_out));
-    cache_data cache_d(.CLK(CLK), .data_in(cache_din), .we(mhub.we || ready), .from_ram(ready), .be(mhub.be), .index(index_req), .block_offset(block_offset_req), .byte_offset(byte_offset_req), .data_out(data_out));
-    cache_FSM cache_fsm(.CLK(CLK), .miss(miss), .ready(ready), .dirty(dirty), .en(mhub.en), .we(mhub.we), .we_mem(ram.we), .en_mem(ram.en), .wr_dirty(wr_dirty), .valid(wr_valid), .wr_tag(wr_tag), .cpu_hold(mhub.hold) );
+    cache_data_d cache_d(.CLK(CLK), .data_in(cache_din), .we(mhub.we || wr_from_ram), .from_ram(wr_from_ram), .be(mhub.be), .index(index_req), .block_offset(block_offset_req), .data_out(data_out));
+    cache_FSM cache_fsm(.CLK(CLK), .miss(miss), .ready(ready), .dirty(dirty), .en(mhub.en), .we(mhub.we), .mhub(mhub), .ram(ram), .we_mem(ram.we), .en_mem(ram.en), .wr_dirty(wr_dirty), .valid(wr_valid), .wr_tag(wr_tag), .cpu_hold(mhub.hold), .wr_from_ram(wr_from_ram) );
 
     always_comb begin
         if (tag_current == tag_req) begin
@@ -82,12 +84,12 @@ module d_cache(
         end
     end
 
-    Mult4to1 block_offest_mux(data_out[31:0], data_out[63:32], data_out[95:64], data_out[127:96], block_offset_req, data_out_32);
+    Mult4to1 block_offest_mux(data_out[127:96], data_out[95:64], data_out[63:32], data_out[31:0], block_offset_req, data_out_32);
 
 endmodule
 
 
-module tag_mem(
+module tag_mem_d(
     input CLK,
     input [7:0] index,
     input dirty_in,
@@ -98,7 +100,7 @@ module tag_mem(
     output logic valid,
     output logic dirty);
 
-    logic [63:0] tag_memory [21:0];
+    logic [255:0] tag_memory [21:0];
 
     always@(posedge CLK)
     begin
@@ -117,13 +119,13 @@ module tag_mem(
 
 endmodule
 
-module cache_data(
+module cache_data_d(
     input CLK,
     input [127:0] data_in,
     input we, from_ram,
     input [3:0] be,
     input [7:0] index,
-    input [1:0] block_offset, byte_offset,
+    input [1:0] block_offset,
     output logic [127:0] data_out
   );
 
@@ -147,12 +149,15 @@ module cache_data(
           end
         end
     end
-      data_out = cache_memory[index];
+    //data_out = cache_memory[index];
   end
+ 
+ always_comb
+    data_out = cache_memory[index];
 
 endmodule
 
-module Mult4to1(In1, In2, In3, In4, Sel, Out);
+/*module Mult4to1(In1, In2, In3, In4, Sel, Out);
     input [31:0] In1, In2, In3, In4; //four 64-bit inputs
     input [1:0] Sel; //selector signal
     output logic [31:0] Out; //64-bit output
@@ -164,3 +169,4 @@ module Mult4to1(In1, In2, In3, In4, Sel, Out);
             default: Out <= In4;
         endcase
 endmodule
+*/
