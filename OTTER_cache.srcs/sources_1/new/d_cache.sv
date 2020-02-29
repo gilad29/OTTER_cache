@@ -44,7 +44,7 @@ module d_cache(
     assign index_req = mhub.waddr[11:4];
     assign block_offset_req = mhub.waddr[3:2];
     //assign byte_offset_req = mhub.waddr[1:0];
-    assign mhub.dout = data_out_32;
+    //assign mhub.dout = data_out_32;
     assign ram.din = data_out;
     assign ram.baddr = mhub.waddr;    
    
@@ -59,21 +59,26 @@ module d_cache(
     assign miss = ~hit;
     wire ready;
     assign ready = ~ram.hold;
-    wire wr_from_ram;
+    wire wr_from_ram, wr_mhub_dout;
 
     always_comb begin
-      if (mhub.we)
+      if (!wr_from_ram)
         cache_din = {{96{1'b0}},mhub.din};
-      else if (ready)
+      else if (wr_from_ram)
         cache_din = ram.dout;
       else
         cache_din = 0;
+    end
+    
+    always_ff@(posedge CLK) begin
+      if (wr_mhub_dout)
+        mhub.dout = data_out_32;
     end
 
     tag_mem_d TAG ( .CLK(CLK), .index(index_req), .tag_in(tag_req), .dirty_in(wr_dirty), .valid_in(wr_valid), .we(wr_tag), .tag_out(tag_current), .valid(valid), .dirty(dirty));
     // cache_data cache_d(.CLK(CLK), .data_in(mem_data), .index(index_req), .block_offset(block_offset_req), .byte_offset(byte_offset_req), .data_out(data_out));
     cache_data_d cache_d(.CLK(CLK), .data_in(cache_din), .we(mhub.we || wr_from_ram), .from_ram(wr_from_ram), .be(mhub.be), .index(index_req), .block_offset(block_offset_req), .data_out(data_out));
-    cache_FSM cache_fsm(.CLK(CLK), .miss(miss), .ready(ready), .dirty(dirty), .en(mhub.en), .we(mhub.we), .mhub(mhub), .ram(ram), .we_mem(ram.we), .en_mem(ram.en), .wr_dirty(wr_dirty), .valid(wr_valid), .wr_tag(wr_tag), .cpu_hold(mhub.hold), .wr_from_ram(wr_from_ram) );
+    cache_FSM cache_fsm(.CLK(CLK), .miss(miss), .ready(ready), .dirty(dirty), .en(mhub.en), .we(mhub.we), .mhub(mhub), .ram(ram), .we_mem(ram.we), .en_mem(ram.en), .wr_dirty(wr_dirty), .valid(wr_valid), .wr_tag(wr_tag), .cpu_hold(mhub.hold), .wr_from_ram(wr_from_ram), .wr_mhub_dout(wr_mhub_dout) );
 
     always_comb begin
         if (tag_current == tag_req) begin
@@ -84,7 +89,7 @@ module d_cache(
         end
     end
 
-    Mult4to1 block_offest_mux(data_out[127:96], data_out[95:64], data_out[63:32], data_out[31:0], block_offset_req, data_out_32);
+    Mult4to1 block_offest_mux(data_out[31:0],data_out[63:32], data_out[95:64],data_out[127:96], block_offset_req, data_out_32);
 
 endmodule
 
@@ -129,7 +134,7 @@ module cache_data_d(
     output logic [127:0] data_out
   );
 
-  logic [255:0] cache_memory [127:0];
+  logic [127:0] cache_memory [255:0];
 
   initial begin
       for(int i=0; i<256; i++)
