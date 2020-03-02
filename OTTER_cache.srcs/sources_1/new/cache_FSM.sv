@@ -21,10 +21,10 @@
 
 
 module cache_FSM(
-    input CLK, miss, dirty, ready, en, we,
+    input CLK, miss, dirty, ready,
     i_mhub_to_dcache.device mhub,
     i_dcache_to_ram.controller ram,
-    output logic we_mem, en_mem, wr_dirty, valid, wr_tag, cpu_hold, wr_from_ram, wr_mhub_dout
+    output logic wr_dirty, valid, wr_tag, wr_from_ram, wr_mhub_dout, wr_ram_din, wr_ram_tag, clr_dirty
     );
 
     typedef enum logic[1:0] {COMPARE_TAG,WRITEBACK,ALLOCATE_READ_RAM,ALLOCATE_SAVE} state_type;
@@ -36,18 +36,21 @@ module cache_FSM(
       n_state = state;
       case (state)
         COMPARE_TAG: begin
-          en_mem = 0;
-          we_mem = 0;
+          clr_dirty = 0;
+          ram.en = 0;
+          ram.we = 0;
           wr_from_ram = 0;
-          cpu_hold = en && miss;
+          wr_ram_tag = 0;
+          mhub.hold = mhub.en && miss;
           if (miss) begin
             wr_mhub_dout = 0;
-            if (dirty) begin
-              en_mem = 0;
+            if (dirty && mhub.en) begin
               n_state = WRITEBACK;
+              wr_ram_din = 1;
             end
             else begin
-                if (en) begin
+                wr_ram_din = 0;
+                if (mhub.en) begin
                   n_state = ALLOCATE_READ_RAM;
                 end
                 else
@@ -58,10 +61,11 @@ module cache_FSM(
             valid = 0;  
           end
           else begin
-            if (en) begin
+            wr_ram_din = 0;
+            if (mhub.en) begin
               valid = 1;
               wr_tag = 1;
-              if (we) begin
+              if (mhub.we) begin
                 wr_dirty = 1;
                 wr_mhub_dout = 0;
               end
@@ -70,36 +74,46 @@ module cache_FSM(
                 wr_dirty = 0;
               end
             end
-            else
+            else begin
               valid = 0;
               wr_tag = 0;
               wr_dirty = 0;
+            end
             n_state = COMPARE_TAG;
           end
         end
         WRITEBACK: begin
+          wr_ram_din = 0;
           wr_mhub_dout = 0;
           valid = 0;
           wr_tag = 0;
           wr_dirty = 0;
-          cpu_hold = 1;
-          en_mem = 0;
-          we_mem = 1;
+          mhub.hold = 1;
+          ram.en = 1;
+          ram.we = 1;
           wr_from_ram = 0;
-          if (ready)
+          wr_ram_tag = 1;
+          if (ready) begin
             n_state = ALLOCATE_READ_RAM;
-          else
-            n_state <= WRITEBACK;
+            clr_dirty = 1;
+          end
+          else begin
+            clr_dirty = 0;
+            n_state = WRITEBACK;
+          end
         end
         ALLOCATE_READ_RAM: begin
+          clr_dirty = 0;
+          wr_ram_din = 0;
           wr_mhub_dout = 0;
           valid = 0;
           wr_tag = 0;
           wr_dirty = 0;
-          cpu_hold = 1;
-          we_mem = 0;
-          en_mem = 1;
+          mhub.hold = 1;
+          ram.we = 0;
+          ram.en = 1;
           wr_from_ram = 0;
+          wr_ram_tag = 0;
           ram.baddr = mhub.waddr[31:4];
           if (ready)
             n_state = ALLOCATE_SAVE;
@@ -107,14 +121,17 @@ module cache_FSM(
             n_state = ALLOCATE_READ_RAM;
         end
         ALLOCATE_SAVE: begin
+          clr_dirty = 0;
+          wr_ram_din = 0;
           wr_mhub_dout = 0;
           valid = 1;
           wr_tag = 1;
           wr_dirty = 0;
-          cpu_hold = 1;
-          we_mem = 0;
-          en_mem = 0;
+          mhub.hold = 1;
+          ram.we = 0;
+          ram.en = 0;
           wr_from_ram = 1;
+          wr_ram_tag = 0;
           n_state = COMPARE_TAG;
         end
        default:
